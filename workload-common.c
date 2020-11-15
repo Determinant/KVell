@@ -3,11 +3,15 @@
 /*
  * Create a workload item for the database
  */
-char *create_unique_item(size_t item_size, uint64_t uid) {
+char *create_unique_item(size_t key_size, size_t value_size, uint64_t uid) {
+   size_t item_size = key_size + sizeof(struct item_metadata) + value_size;
    char *item = malloc(item_size);
    struct item_metadata *meta = (struct item_metadata *)item;
-   meta->key_size = 8;
-   meta->value_size = item_size - 8 - sizeof(*meta);
+   //meta->key_size = 8;
+   //meta->value_size = item_size - 8 - sizeof(*meta);
+   meta->key_size = key_size;
+   meta->value_size = value_size;
+   //fprintf(stderr, "k %zu, v %zu\n", meta->key_size, meta->value_size);
 
    char *item_key = &item[sizeof(*meta)];
    char *item_value = &item[sizeof(*meta) + meta->key_size];
@@ -67,7 +71,7 @@ void *repopulate_db_worker(void *pdata) {
       struct slab_callback *cb = malloc(sizeof(*cb));
       cb->cb = add_in_tree;
       cb->payload = NULL;
-      cb->item = api->create_unique_item(pos[i], w->nb_items_in_db);
+      cb->item = api->create_unique_item(pos[i], w->nb_items_in_db, w);
       kv_add_async(cb);
       periodic_count(1000, "Repopulating database (%lu%%)", 100LU-(end-i)*100LU/(end - start));
    }

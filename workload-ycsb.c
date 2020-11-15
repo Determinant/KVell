@@ -5,14 +5,14 @@
 #include "headers.h"
 #include "workload-common.h"
 
-static char *_create_unique_item_ycsb(uint64_t uid) {
-   size_t item_size = 1024;
+static char *_create_unique_item_ycsb(uint64_t uid, struct workload *w) {
+   //size_t item_size = 1024;
    //size_t item_size = sizeof(struct item_metadata) + 2*sizeof(size_t);
-   return create_unique_item(item_size, uid);
+   return create_unique_item(w->key_size, w->value_size, uid);
 }
 
-static char *create_unique_item_ycsb(uint64_t uid, uint64_t max_uid) {
-   return _create_unique_item_ycsb(uid);
+static char *create_unique_item_ycsb(uint64_t uid, uint64_t max_uid, struct workload *w) {
+   return _create_unique_item_ycsb(uid, w);
 }
 
 /* Is the current request a get or a put? */
@@ -32,14 +32,14 @@ static int random_get_put(int test) {
 }
 
 /* YCSB A (or D), B, C */
-static void _launch_ycsb(int test, int nb_requests, int zipfian) {
+static void _launch_ycsb(int test, int nb_requests, int zipfian, struct workload *w) {
    declare_periodic_count;
    for(size_t i = 0; i < nb_requests; i++) {
       struct slab_callback *cb = bench_cb();
       if(zipfian)
-         cb->item = _create_unique_item_ycsb(zipf_next());
+         cb->item = _create_unique_item_ycsb(zipf_next(), w);
       else
-         cb->item = _create_unique_item_ycsb(uniform_next());
+         cb->item = _create_unique_item_ycsb(uniform_next(), w);
       if(random_get_put(test)) { // In these tests we update with a given probability
          kv_update_async(cb);
       } else { // or we read
@@ -50,21 +50,21 @@ static void _launch_ycsb(int test, int nb_requests, int zipfian) {
 }
 
 /* YCSB E */
-static void _launch_ycsb_e(int test, int nb_requests, int zipfian) {
+static void _launch_ycsb_e(int test, int nb_requests, int zipfian, struct workload *w) {
    declare_periodic_count;
    random_gen_t rand_next = zipfian?zipf_next:uniform_next;
    for(size_t i = 0; i < nb_requests; i++) {
       if(random_get_put(test)) { // In this test we update with a given probability
          struct slab_callback *cb = bench_cb();
-         cb->item = _create_unique_item_ycsb(rand_next());
+         cb->item = _create_unique_item_ycsb(rand_next(), w);
          kv_update_async(cb);
       } else {  // or we scan
-         char *item = _create_unique_item_ycsb(rand_next());
+         char *item = _create_unique_item_ycsb(rand_next(), w);
          tree_scan_res_t scan_res = kv_init_scan(item, uniform_next()%99+1);
          free(item);
          for(size_t j = 0; j < scan_res.nb_entries; j++) {
             struct slab_callback *cb = bench_cb();
-            cb->item = _create_unique_item_ycsb(scan_res.hashes[j]);
+            cb->item = _create_unique_item_ycsb(scan_res.hashes[j], w);
             kv_read_async_no_lookup(cb, scan_res.entries[j].slab, scan_res.entries[j].slab_idx);
          }
          free(scan_res.hashes);
@@ -78,21 +78,21 @@ static void _launch_ycsb_e(int test, int nb_requests, int zipfian) {
 static void launch_ycsb(struct workload *w, bench_t b) {
    switch(b) {
       case ycsb_a_uniform:
-         return _launch_ycsb(0, w->nb_requests_per_thread, 0);
+         return _launch_ycsb(0, w->nb_requests_per_thread, 0, w);
       case ycsb_b_uniform:
-         return _launch_ycsb(1, w->nb_requests_per_thread, 0);
+         return _launch_ycsb(1, w->nb_requests_per_thread, 0, w);
       case ycsb_c_uniform:
-         return _launch_ycsb(2, w->nb_requests_per_thread, 0);
+         return _launch_ycsb(2, w->nb_requests_per_thread, 0, w);
       case ycsb_e_uniform:
-         return _launch_ycsb_e(3, w->nb_requests_per_thread, 0);
+         return _launch_ycsb_e(3, w->nb_requests_per_thread, 0, w);
       case ycsb_a_zipfian:
-         return _launch_ycsb(0, w->nb_requests_per_thread, 1);
+         return _launch_ycsb(0, w->nb_requests_per_thread, 1, w);
       case ycsb_b_zipfian:
-         return _launch_ycsb(1, w->nb_requests_per_thread, 1);
+         return _launch_ycsb(1, w->nb_requests_per_thread, 1, w);
       case ycsb_c_zipfian:
-         return _launch_ycsb(2, w->nb_requests_per_thread, 1);
+         return _launch_ycsb(2, w->nb_requests_per_thread, 1, w);
       case ycsb_e_zipfian:
-         return _launch_ycsb_e(3, w->nb_requests_per_thread, 1);
+         return _launch_ycsb_e(3, w->nb_requests_per_thread, 1, w);
       default:
          die("Unsupported workload\n");
    }

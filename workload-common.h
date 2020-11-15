@@ -29,7 +29,7 @@ struct workload_api {
    void (*launch)(struct workload *w, bench_t b); // launch workload
    const char* (*name)(bench_t w); // pretty print the benchmark (e.g., "YCSB A - Uniform")
    const char* (*api_name)(void); // pretty print API name (YCSB or PRODUCTION)
-   char* (*create_unique_item)(uint64_t uid, uint64_t max_uid); // allocate an item in memory and return it
+   char* (*create_unique_item)(uint64_t uid, uint64_t max_uid, struct workload *w); // allocate an item in memory and return it
 };
 extern struct workload_api YCSB;
 extern struct workload_api PRODUCTION;
@@ -45,12 +45,14 @@ struct workload {
    // Filled automatically
    int nb_workers;
    uint64_t nb_requests_per_thread;
+   size_t key_size;
+   size_t value_size;
 };
 
 void repopulate_db(struct workload *w);
 void run_workload(struct workload *w, bench_t bench);
 
-char *create_unique_item(size_t item_size, uint64_t uid);
+char *create_unique_item(size_t key_size, size_t value_size, uint64_t uid);
 void print_item(size_t idx, void* _item);
 
 void show_item(struct slab_callback *cb, void *item);

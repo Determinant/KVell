@@ -2,7 +2,7 @@
 #include "workload-common.h"
 
 // Create a new item for the database
-static char *create_unique_item_prod(uint64_t uid, uint64_t max_uid) {
+static char *create_unique_item_prod(uint64_t uid, uint64_t max_uid, struct workload *w) {
    size_t item_size;
    if(uid*100LU/max_uid < 1) // 1%
       item_size = 100;
@@ -13,7 +13,7 @@ static char *create_unique_item_prod(uint64_t uid, uint64_t max_uid) {
    else
       item_size = 4096;
 
-   return create_unique_item(item_size, uid);
+   return create_unique_item(8, item_size - 8 - sizeof(struct item_metadata), uid);
 }
 
 static void launch_prod(struct workload *w, bench_t b) {
@@ -23,7 +23,7 @@ static void launch_prod(struct workload *w, bench_t b) {
    uint64_t nb_requests = w->nb_requests_per_thread;
    for(size_t i = 0; i < nb_requests; i++) {
       struct slab_callback *cb = bench_cb();
-      cb->item = create_unique_item_prod(rand_next(), w->nb_items_in_db);
+      cb->item = create_unique_item_prod(rand_next(), w->nb_items_in_db, w);
 
       // 58% write 40% read 2% scan
       long random = uniform_next() % 100;
@@ -37,7 +37,7 @@ static void launch_prod(struct workload *w, bench_t b) {
          free(cb);
          for(size_t j = 0; j < scan_res.nb_entries; j++) {
             cb = bench_cb();
-            cb->item = create_unique_item_prod(scan_res.hashes[j], w->nb_items_in_db);
+            cb->item = create_unique_item_prod(scan_res.hashes[j], w->nb_items_in_db, w);
             kv_read_async_no_lookup(cb, scan_res.entries[j].slab, scan_res.entries[j].slab_idx);
          }
          free(scan_res.hashes);

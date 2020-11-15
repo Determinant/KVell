@@ -1,23 +1,55 @@
+#include <getopt.h>
 #include "headers.h"
 
+struct option longopts[] = {
+    {"set-key-size", required_argument, 0, 'k'},
+    {"set-val-size", required_argument, 0, 'v'},
+    {"set-nitems", required_argument, 0, 'm'},
+    {"set-nops", required_argument, 0, 'n'},
+    {0, 0, 0, 0}
+};
+
 int main(int argc, char **argv) {
+   int idx;
+   size_t key_size = 32, val_size = 128, nitems = 100000000, nops = 100000000;
+   for (;;)
+   {
+        int c = getopt_long(argc, argv, "k:v:n:m:", longopts, &idx);
+        if (c == -1) break;
+        switch (c)
+        {
+            case 'k': key_size = atoi(optarg);
+                      assert(key_size > 0);
+                      break;
+            case 'v': val_size = atoi(optarg);
+                      assert(val_size > 0);
+                      break;
+            case 'n': nitems = atoi(optarg);
+                      break;
+            case 'm': nops = atoi(optarg);
+                      break;
+        }
+
+   }
    int nb_disks, nb_workers_per_disk;
    declare_timer;
 
    /* Definition of the workload, if changed you need to erase the DB before relaunching */
    struct workload w = {
       .api = &YCSB,
-      .nb_items_in_db = 100000000LU,
+      .nb_items_in_db = nitems,
       .nb_load_injectors = 4,
       //.nb_load_injectors = 12, // For scans (see scripts/run-aws.sh and OVERVIEW.md)
+      .key_size = key_size,
+      .value_size = val_size,
    };
 
 
    /* Parsing of the options */
-   if(argc < 3)
+   if(argc - optind < 2)
       die("Usage: ./main <nb disks> <nb workers per disk>\n\tData is stored in %s\n", PATH);
-   nb_disks = atoi(argv[1]);
-   nb_workers_per_disk = atoi(argv[2]);
+   nb_disks = atoi(argv[optind]);
+   nb_workers_per_disk = atoi(argv[optind + 1]);
 
    /* Pretty printing useful info */
    printf("# Configuration:\n");
@@ -27,7 +59,7 @@ int main(int argc, char **argv) {
    printf("# \tQueue configuration: %d maximum pending callbaks per worker\n", MAX_NB_PENDING_CALLBACKS_PER_WORKER);
    printf("# \tDatastructures: %d (memory index) %d (pagecache)\n", MEMORY_INDEX, PAGECACHE_INDEX);
    printf("# \tThread pinning: %s\n", PINNING?"yes":"no");
-   printf("# \tBench: %s (%lu elements)\n", w.api->api_name(), w.nb_items_in_db);
+   printf("# \tBench: %s (%lu elements) key_size = %zu value_size = %zu\n", w.api->api_name(), w.nb_items_in_db, w.key_size, w.value_size);
 
    /* Initialization of random library */
    start_timer {
@@ -50,11 +82,11 @@ int main(int argc, char **argv) {
       //ycsb_e_uniform, ycsb_e_zipfian, // Scans
    };
    foreach(workload, workloads) {
-      if(workload == ycsb_e_uniform || workload == ycsb_e_zipfian) {
-         w.nb_requests = 2000000LU; // requests for YCSB E are longer (scans) so we do less
-      } else {
-         w.nb_requests = 100000000LU;
-      }
+      //if(workload == ycsb_e_uniform || workload == ycsb_e_zipfian) {
+      //   w.nb_requests = 2000000LU; // requests for YCSB E are longer (scans) so we do less
+      //} else {
+         w.nb_requests = nops;
+      //}
       run_workload(&w, workload);
    }
    return 0;
