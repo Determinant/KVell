@@ -6,15 +6,18 @@ struct option longopts[] = {
     {"set-val-size", required_argument, 0, 'v'},
     {"set-nitems", required_argument, 0, 'm'},
     {"set-nops", required_argument, 0, 'n'},
+    {"nthread", required_argument, 0, 'T'},
     {0, 0, 0, 0}
 };
 
 int main(int argc, char **argv) {
    int idx;
-   size_t key_size = 32, val_size = 128, nitems = 100000000, nops = 100000000;
+   size_t key_size = 32, val_size = 128;
+   size_t nitems = 100000000, nops = 100000000;
+   size_t nthreads = 1;
    for (;;)
    {
-        int c = getopt_long(argc, argv, "k:v:n:m:", longopts, &idx);
+        int c = getopt_long(argc, argv, "k:v:n:m:T:", longopts, &idx);
         if (c == -1) break;
         switch (c)
         {
@@ -28,6 +31,9 @@ int main(int argc, char **argv) {
                       break;
             case 'm': nops = atoi(optarg);
                       break;
+            case 'T': nthreads = atoi(optarg);
+                      assert(nthreads > 0 && nthreads <= 32);
+                      break;
         }
 
    }
@@ -38,7 +44,7 @@ int main(int argc, char **argv) {
    struct workload w = {
       .api = &YCSB,
       .nb_items_in_db = nitems,
-      .nb_load_injectors = 4,
+      .nb_load_injectors = nthreads,
       //.nb_load_injectors = 12, // For scans (see scripts/run-aws.sh and OVERVIEW.md)
       .key_size = key_size,
       .value_size = val_size,
