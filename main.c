@@ -6,18 +6,31 @@ struct option longopts[] = {
     {"set-val-size", required_argument, 0, 'v'},
     {"set-nitems", required_argument, 0, 'm'},
     {"set-nops", required_argument, 0, 'n'},
+    {"set-crash-point", required_argument, 0, 'c'},
+    {"workload", required_argument, 0, 'w'},
     {"nthread", required_argument, 0, 'T'},
     {0, 0, 0, 0}
+};
+
+const char *ws[] = {
+    "a-uniform",
+    "b-uniform",
+    "c-uniform",
+    "a-zipfian",
+    "b-zipfian",
+    "c-zipfian",
 };
 
 int main(int argc, char **argv) {
    int idx;
    size_t key_size = 32, val_size = 128;
    size_t nitems = 100000000, nops = 100000000;
+   size_t crash_point = nops;
    size_t nthreads = 1;
+   int wi = -1;
    for (;;)
    {
-        int c = getopt_long(argc, argv, "k:v:n:m:T:", longopts, &idx);
+        int c = getopt_long(argc, argv, "k:v:n:m:T:c:w:", longopts, &idx);
         if (c == -1) break;
         switch (c)
         {
@@ -31,12 +44,24 @@ int main(int argc, char **argv) {
                       break;
             case 'm': nops = atoi(optarg);
                       break;
+            case 'c': crash_point = atoi(optarg);
+                      break;
+            case 'w': 
+                      for (size_t i = 0; i < 6; i++) {
+                          if (strcmp(optarg, ws[i]) == 0)
+                          {
+                              wi = i;
+                              break;
+                          }
+                      }
+                      break;
             case 'T': nthreads = atoi(optarg);
                       assert(nthreads > 0 && nthreads <= 32);
                       break;
         }
-
    }
+   assert(wi != -1);
+   assert(crash_point <= nops);
    int nb_disks, nb_workers_per_disk;
    declare_timer;
 
@@ -48,6 +73,7 @@ int main(int argc, char **argv) {
       //.nb_load_injectors = 12, // For scans (see scripts/run-aws.sh and OVERVIEW.md)
       .key_size = key_size,
       .value_size = val_size,
+      .crash_point = crash_point,
    };
 
 
@@ -65,7 +91,7 @@ int main(int argc, char **argv) {
    printf("# \tQueue configuration: %d maximum pending callbaks per worker\n", MAX_NB_PENDING_CALLBACKS_PER_WORKER);
    printf("# \tDatastructures: %d (memory index) %d (pagecache)\n", MEMORY_INDEX, PAGECACHE_INDEX);
    printf("# \tThread pinning: %s\n", PINNING?"yes":"no");
-   printf("# \tBench: %s (%lu elements) key_size = %zu value_size = %zu\n", w.api->api_name(), w.nb_items_in_db, w.key_size, w.value_size);
+   printf("# \tBench: %s (%lu elements) key_size = %zu value_size = %zu crash at %zu\n", w.api->api_name(), w.nb_items_in_db, w.key_size, w.value_size, w.crash_point);
 
    /* Initialization of random library */
    start_timer {
@@ -87,13 +113,14 @@ int main(int argc, char **argv) {
       ycsb_a_zipfian, ycsb_b_zipfian, ycsb_c_zipfian,
       //ycsb_e_uniform, ycsb_e_zipfian, // Scans
    };
-   foreach(workload, workloads) {
+   workload = workloads[wi];
+   //foreach(workload, workloads) {
       //if(workload == ycsb_e_uniform || workload == ycsb_e_zipfian) {
       //   w.nb_requests = 2000000LU; // requests for YCSB E are longer (scans) so we do less
       //} else {
          w.nb_requests = nops;
       //}
       run_workload(&w, workload);
-   }
+   //}
    return 0;
 }

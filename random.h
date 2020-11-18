@@ -15,4 +15,5 @@ long production_random1(void); // production workload simulator
 long production_random2(void); // production workload simulator
 
 const char *get_function_name(random_gen_t f);
+long get_items();
 #endif

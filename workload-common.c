@@ -1,9 +1,10 @@
 #include "headers.h"
+#include "better_rand.h"
 
 /*
  * Create a workload item for the database
  */
-char *create_unique_item(size_t key_size, size_t value_size, uint64_t uid) {
+char *create_unique_item(size_t key_size, size_t value_size, uint64_t uid, rng_t rng) {
    size_t item_size = key_size + sizeof(struct item_metadata) + value_size;
    char *item = malloc(item_size);
    struct item_metadata *meta = (struct item_metadata *)item;
@@ -11,12 +12,14 @@ char *create_unique_item(size_t key_size, size_t value_size, uint64_t uid) {
    //meta->value_size = item_size - 8 - sizeof(*meta);
    meta->key_size = key_size;
    meta->value_size = value_size;
-   //fprintf(stderr, "k %zu, v %zu\n", meta->key_size, meta->value_size);
 
    char *item_key = &item[sizeof(*meta)];
    char *item_value = &item[sizeof(*meta) + meta->key_size];
-   *(uint64_t*)item_key = uid;
-   *(uint64_t*)item_value = uid;
+   //printf("uid = %zu\n", uid);
+   //*(uint64_t*)item_key = uid;
+   //*(uint64_t*)item_value = uid;
+   gen_rand_bytes_from_int(item_key, item_key + key_size, uid);
+   gen_rand_bytes(item_value, item_value + value_size, rng);
    return item;
 }
 
@@ -59,6 +62,7 @@ struct rebuild_pdata {
 void *repopulate_db_worker(void *pdata) {
    declare_periodic_count;
    struct rebuild_pdata *data = pdata;
+   rng_t rng = new_rng(0);
 
    pin_me_on(get_nb_workers() + data->id);
 
@@ -71,11 +75,12 @@ void *repopulate_db_worker(void *pdata) {
       struct slab_callback *cb = malloc(sizeof(*cb));
       cb->cb = add_in_tree;
       cb->payload = NULL;
-      cb->item = api->create_unique_item(pos[i], w->nb_items_in_db, w);
+      cb->item = api->create_unique_item(pos[i], w->nb_items_in_db, rng, w);
       kv_add_async(cb);
       periodic_count(1000, "Repopulating database (%lu%%)", 100LU-(end-i)*100LU/(end - start));
    }
 
+   free_rng(rng);
    return NULL;
 }
 

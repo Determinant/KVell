@@ -186,3 +186,6 @@ const char *get_function_name(random_gen_t f) {
 
 
 
+long get_items() {
+    return items;
+}

@@ -1,6 +1,6 @@
 CC=clang  #If you use GCC, add -fno-strict-aliasing to the CFLAGS because the Google BTree does weird stuff
 #CFLAGS=-Wall -O0 -ggdb3
-CFLAGS=-O2 -ggdb3 -Wall
+CFLAGS=-O2 -ggdb3 -Wall -Werror
 
 CXX=clang++
 CXXFLAGS= ${CFLAGS} -std=c++11
@@ -8,7 +8,7 @@ CXXFLAGS= ${CFLAGS} -std=c++11
 LDLIBS=-lm -lpthread -lstdc++
 
 INDEXES_OBJ=indexes/rbtree.o indexes/rax.o indexes/art.o indexes/btree.o
-MAIN_OBJ=main.o slab.o freelist.o ioengine.o pagecache.o stats.o random.o slabworker.o workload-common.o workload-ycsb.o workload-production.o utils.o in-memory-index-rbtree.o in-memory-index-rax.o in-memory-index-art.o in-memory-index-btree.o ${INDEXES_OBJ}
+MAIN_OBJ=main.o slab.o freelist.o ioengine.o pagecache.o stats.o random.o slabworker.o workload-common.o workload-ycsb.o workload-production.o utils.o in-memory-index-rbtree.o in-memory-index-rax.o in-memory-index-art.o in-memory-index-btree.o ${INDEXES_OBJ} better_rand.o
 MICROBENCH_OBJ=microbench.o random.o stats.o utils.o ${INDEXES_OBJ}
 BENCH_OBJ=benchcomponents.o pagecache.o random.o $(INDEXES_OBJ)
 
@@ -16,6 +16,9 @@ BENCH_OBJ=benchcomponents.o pagecache.o random.o $(INDEXES_OBJ)
 .PHONY: all clean
 
 all: makefile.dep main microbench benchcomponents
+
+better_rand.o: better_rand.cpp
+	$(CXX) -c -o $@ $<
 
 makefile.dep: *.[Cch] indexes/*.[ch] indexes/*.cc
 	for i in *.[Cc]; do ${CC} -MM "$${i}" ${CFLAGS}; done > $@

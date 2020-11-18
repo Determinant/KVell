@@ -4,20 +4,21 @@
 
 #include "headers.h"
 #include "workload-common.h"
+#include "better_rand.h"
 
-static char *_create_unique_item_ycsb(uint64_t uid, struct workload *w) {
+
+static char *_create_unique_item_ycsb(uint64_t uid, rng_t rng, struct workload *w) {
    //size_t item_size = 1024;
    //size_t item_size = sizeof(struct item_metadata) + 2*sizeof(size_t);
-   return create_unique_item(w->key_size, w->value_size, uid);
+   return create_unique_item(w->key_size, w->value_size, uid, rng);
 }
 
-static char *create_unique_item_ycsb(uint64_t uid, uint64_t max_uid, struct workload *w) {
-   return _create_unique_item_ycsb(uid, w);
+static char *create_unique_item_ycsb(uint64_t uid, uint64_t max_uid, rng_t rng, struct workload *w) {
+   return _create_unique_item_ycsb(uid, rng, w);
 }
 
 /* Is the current request a get or a put? */
-static int random_get_put(int test) {
-   long random = uniform_next() % 100;
+static int random_get_put(int test, uint64_t random) {
    switch(test) {
       case 0: // A
          return random >= 50;
@@ -34,45 +35,58 @@ static int random_get_put(int test) {
 /* YCSB A (or D), B, C */
 static void _launch_ycsb(int test, int nb_requests, int zipfian, struct workload *w) {
    declare_periodic_count;
+   rng_t rng = new_rng(0);
+   uniform_dist_t dist = new_uniform(0, 99);
+   uniform_dist_t rudist = new_uniform(0, get_items() - 1);
+   zipfian_dist_t rzdist = new_zipfian(0, get_items() - 1);
    for(size_t i = 0; i < nb_requests; i++) {
       struct slab_callback *cb = bench_cb();
       if(zipfian)
-         cb->item = _create_unique_item_ycsb(zipf_next(), w);
+         cb->item = _create_unique_item_ycsb(rand_from_zipfian(rzdist, rng), rng, w);
       else
-         cb->item = _create_unique_item_ycsb(uniform_next(), w);
-      if(random_get_put(test)) { // In these tests we update with a given probability
+         cb->item = _create_unique_item_ycsb(rand_from_uniform(rudist, rng), rng, w);
+      if(random_get_put(test, rand_from_uniform(dist, rng))) { // In these tests we update with a given probability
          kv_update_async(cb);
       } else { // or we read
          kv_read_async(cb);
       }
       periodic_count(1000, "YCSB Load Injector (%lu%%)", i*100LU/nb_requests);
+      if (i >= w->crash_point)
+      {
+          printf("crashing the db at %zu", i);
+          exit(0);
+      }
    }
+   free_rng(rng);
+   free_uniform(dist);
+   free_uniform(rudist);
+   free_zipfian(rzdist);
 }
 
-/* YCSB E */
-static void _launch_ycsb_e(int test, int nb_requests, int zipfian, struct workload *w) {
-   declare_periodic_count;
-   random_gen_t rand_next = zipfian?zipf_next:uniform_next;
-   for(size_t i = 0; i < nb_requests; i++) {
-      if(random_get_put(test)) { // In this test we update with a given probability
-         struct slab_callback *cb = bench_cb();
-         cb->item = _create_unique_item_ycsb(rand_next(), w);
-         kv_update_async(cb);
-      } else {  // or we scan
-         char *item = _create_unique_item_ycsb(rand_next(), w);
-         tree_scan_res_t scan_res = kv_init_scan(item, uniform_next()%99+1);
-         free(item);
-         for(size_t j = 0; j < scan_res.nb_entries; j++) {
-            struct slab_callback *cb = bench_cb();
-            cb->item = _create_unique_item_ycsb(scan_res.hashes[j], w);
-            kv_read_async_no_lookup(cb, scan_res.entries[j].slab, scan_res.entries[j].slab_idx);
-         }
-         free(scan_res.hashes);
-         free(scan_res.entries);
-      }
-      periodic_count(1000, "YCSB Load Injector (scans) (%lu%%)", i*100LU/nb_requests);
-   }
-}
+///* YCSB E */
+//static void _launch_ycsb_e(int test, int nb_requests, int zipfian, struct workload *w) {
+//   declare_periodic_count;
+//   random_gen_t rand_next = zipfian?zipf_next:uniform_next;
+//   for(size_t i = 0; i < nb_requests; i++) {
+//      if(random_get_put(test)) { // In this test we update with a given probability
+//         struct slab_callback *cb = bench_cb();
+//         cb->item = _create_unique_item_ycsb(rand_next(), w);
+//         kv_update_async(cb);
+//      } else {  // or we scan
+//         char *item = _create_unique_item_ycsb(rand_next(), w);
+//         tree_scan_res_t scan_res = kv_init_scan(item, uniform_next()%99+1);
+//         free(item);
+//         for(size_t j = 0; j < scan_res.nb_entries; j++) {
+//            struct slab_callback *cb = bench_cb();
+//            cb->item = _create_unique_item_ycsb(scan_res.hashes[j], w);
+//            kv_read_async_no_lookup(cb, scan_res.entries[j].slab, scan_res.entries[j].slab_idx);
+//         }
+//         free(scan_res.hashes);
+//         free(scan_res.entries);
+//      }
+//      periodic_count(1000, "YCSB Load Injector (scans) (%lu%%)", i*100LU/nb_requests);
+//   }
+//}
 
 /* Generic interface */
 static void launch_ycsb(struct workload *w, bench_t b) {
@@ -83,16 +97,16 @@ static void launch_ycsb(struct workload *w, bench_t b) {
          return _launch_ycsb(1, w->nb_requests_per_thread, 0, w);
       case ycsb_c_uniform:
          return _launch_ycsb(2, w->nb_requests_per_thread, 0, w);
-      case ycsb_e_uniform:
-         return _launch_ycsb_e(3, w->nb_requests_per_thread, 0, w);
+      //case ycsb_e_uniform:
+      //   return _launch_ycsb_e(3, w->nb_requests_per_thread, 0, w);
       case ycsb_a_zipfian:
          return _launch_ycsb(0, w->nb_requests_per_thread, 1, w);
       case ycsb_b_zipfian:
          return _launch_ycsb(1, w->nb_requests_per_thread, 1, w);
       case ycsb_c_zipfian:
          return _launch_ycsb(2, w->nb_requests_per_thread, 1, w);
-      case ycsb_e_zipfian:
-         return _launch_ycsb_e(3, w->nb_requests_per_thread, 1, w);
+      //case ycsb_e_zipfian:
+      //   return _launch_ycsb_e(3, w->nb_requests_per_thread, 1, w);
       default:
          die("Unsupported workload\n");
    }
