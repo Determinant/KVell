@@ -51,11 +51,6 @@ static void _launch_ycsb(int test, int nb_requests, int zipfian, struct workload
          kv_read_async(cb);
       }
       periodic_count(1000, "YCSB Load Injector (%lu%%)", i*100LU/nb_requests);
-      if (i >= w->crash_point)
-      {
-          printf("crashing the db at %zu", i);
-          exit(0);
-      }
    }
    free_rng(rng);
    free_uniform(dist);

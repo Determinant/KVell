@@ -55,6 +55,7 @@ struct slab_context {
    struct pagecache *pagecache __attribute__((aligned(64)));
    struct io_context *io_ctx;
    uint64_t rdt;                                         // Latest timestamp
+   size_t crash_point;
 } *slab_contexts;
 
 /* A file is only managed by 1 worker. File => worker function. */
@@ -374,12 +375,17 @@ static void *worker_slab_init(void *pdata) {
       worker_dequeue_requests(ctx); __5 // Process queue
 
       show_breakdown_periodic(1000, ctx->processed_callbacks, "io_submit", "io_getevents", "io_cb", "wait", "slab_cb");
+      if (ctx->processed_callbacks >= ctx->crash_point)
+      {
+          printf("crashing the db at %zu", ctx->crash_point);
+          exit(0);
+      }
    }
 
    return NULL;
 }
 
-void slab_workers_init(int _nb_disks, int nb_workers_per_disk) {
+void slab_workers_init(int _nb_disks, int nb_workers_per_disk, size_t crash_point) {
    size_t max_pending_callbacks = MAX_NB_PENDING_CALLBACKS_PER_WORKER;
    nb_disks = _nb_disks;
    nb_workers = nb_disks * nb_workers_per_disk;
@@ -393,6 +399,7 @@ void slab_workers_init(int _nb_disks, int nb_workers_per_disk) {
       ctx->worker_id = w;
       ctx->max_pending_callbacks = max_pending_callbacks;
       ctx->callbacks = calloc(ctx->max_pending_callbacks, sizeof(*ctx->callbacks));
+      ctx->crash_point = crash_point;
       pthread_create(&t, NULL, worker_slab_init, ctx);
    }
 

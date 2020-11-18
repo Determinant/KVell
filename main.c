@@ -8,7 +8,7 @@ struct option longopts[] = {
     {"set-nops", required_argument, 0, 'n'},
     {"set-crash-point", required_argument, 0, 'c'},
     {"workload", required_argument, 0, 'w'},
-    {"nthread", required_argument, 0, 'T'},
+    {"ninjector", required_argument, 0, 'i'},
     {0, 0, 0, 0}
 };
 
@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
    size_t key_size = 32, val_size = 128;
    size_t nitems = 100000000, nops = 100000000;
    size_t crash_point = nops;
-   size_t nthreads = 1;
+   size_t ninjector = 4;
    int wi = -1;
    for (;;)
    {
@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
                           }
                       }
                       break;
-            case 'T': nthreads = atoi(optarg);
-                      assert(nthreads > 0 && nthreads <= 32);
+            case 'T': ninjector = atoi(optarg);
+                      assert(ninjector > 0 && ninjector <= 32);
                       break;
         }
    }
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
    struct workload w = {
       .api = &YCSB,
       .nb_items_in_db = nitems,
-      .nb_load_injectors = nthreads,
+      .nb_load_injectors = ninjector,
       //.nb_load_injectors = 12, // For scans (see scripts/run-aws.sh and OVERVIEW.md)
       .key_size = key_size,
       .value_size = val_size,
@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
 
    /* Recover database */
    start_timer {
-      slab_workers_init(nb_disks, nb_workers_per_disk);
+      slab_workers_init(nb_disks, nb_workers_per_disk, crash_point);
    } stop_timer("Init found %lu elements", get_database_size());
 
    /* Add missing items if any */
