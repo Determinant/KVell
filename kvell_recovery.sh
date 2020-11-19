@@ -18,6 +18,7 @@ for c in "${crash[@]}"; do
     file="kvell-recovery-k${k}v${v}n${nitems}m${nops}c${c}-${w}.log"
     echo "=== Crashing Run ===" > "$file"
     ./main 1 1 -k "$k" -v "$v" -n "$nitems" -m "$nops" -c "$c" -w "$w" >> "$file"
+    /usr/bin/du -s "$testdir" >> "$file"
     echo "=== Recovery Run ===" >> "$file"
     ./main 1 1 -k "$k" -v "$v" -n 0 -m 0 -c 0 -w "$w" >> "$file"
 done

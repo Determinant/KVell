@@ -377,7 +377,7 @@ static void *worker_slab_init(void *pdata) {
       show_breakdown_periodic(1000, ctx->processed_callbacks, "io_submit", "io_getevents", "io_cb", "wait", "slab_cb");
       if (ctx->processed_callbacks >= ctx->crash_point)
       {
-          printf("crashing the db at %zu", ctx->crash_point);
+          printf("crashing the db at %zu\n", ctx->crash_point);
           exit(0);
       }
    }
